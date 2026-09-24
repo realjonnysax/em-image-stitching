@@ -1,0 +1,15 @@
+# Image data - too large for git
+*.tif
+*.ome.tif
+*.tiff
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS junk
+Thumbs.db
+desktop.ini
