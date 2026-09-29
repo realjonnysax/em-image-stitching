@@ -1,0 +1,16 @@
+@echo off
+rem All-in-one: denoise then stitch every tile set in this folder (or %1).
+rem Output: <target>\denoised\*.tif  and  <target>\denoised\stitched\<set>_ashlar_v7.ome.tif
+setlocal
+set "PY=C:\miniconda3\python.exe"
+if not exist "%PY%" set "PY=python"
+set "DIR=%~dp0"
+if "%DIR:~-1%"=="\" if not "%DIR:~-2%"==":\" set "DIR=%DIR:~0,-1%"
+set "TARGET=%~1"
+if "%TARGET%"=="" set "TARGET=%DIR%"
+"%PY%" "%DIR%\denoise_tool.py" "%TARGET%"
+if errorlevel 1 (pause
+    exit /b 1)
+"%PY%" "%DIR%\stitch_tool.py" "%TARGET%\denoised"
+if errorlevel 1 pause
+endlocal

@@ -3,6 +3,9 @@
 *.ome.tif
 *.tiff
 
+# Trained denoiser artifacts (models are per-machine; training sets stay on D:\SEM training)
+models/
+
 # Jupyter
 .ipynb_checkpoints/
 

@@ -28,6 +28,10 @@ napari, or QuPath.
 | `stitch_here.bat` | Drop into any folder of tiles, double-click to stitch it |
 | `install_sendto.bat` | One-time: adds "Stitch with Ashlar" to the right-click Send To menu |
 | `restitch.py` | Standalone Ashlar registration patch (the interesting part, see below) |
+| `denoise_tool.py` | SEM denoiser: drops trained U-Net models onto tile folders, GUI + command line |
+| `train_denoiser.py` | Trains the denoiser from paired fast/slow scan images (register → normalize → train → eval) |
+| `denoise_here.bat` / `install_sendto_denoise.bat` | Same drop-in / Send-To conveniences for denoising |
+| `process_here.bat` | All-in-one: denoise a folder, then stitch the denoised tiles |
 | `STITCHING_VERSIONS.md` | Full V1→V7 development history: what failed, why, and the fix |
 | `250325_sem_stitch_notebook...ipynb` | Working notebook: parameter validation, seam and duplicate-structure analysis |
 
@@ -127,6 +131,27 @@ output quality matches the validated v7 runs.
   a tile's bottom strip and its northern neighbor's top strip).
 
 Full history with measurements: [STITCHING_VERSIONS.md](STITCHING_VERSIONS.md).
+
+## Denoising (CARE-style, paired scans)
+
+`train_denoiser.py` learns to map noisy fast-scan images to clean slow-scan
+images from **paired** acquisitions of the same field (a = photo scan, b = slow
+scan). Training data lives outside the repo (e.g. `D:\SEM training\datasets\<set name>\`)
+as `NN a.tif` / `NN b.tif` pairs with their JEOL `.txt` sidecars — one detector /
+settings per folder — and is not committed here. Trained model artifacts in
+`models/` are likewise per-machine and git-ignored.
+
+```
+1. python train_denoiser.py register --data "D:\SEM training\datasets"   (cache pairs)
+2. python train_denoiser.py train --model models\<name>.pt               (U-Net, GPU)
+3. python train_denoiser.py eval   --model models\<name>.pt              (vs BM3D, sheet)
+4. Right-click folder of tiles -> Send To -> "Denoise with U-Net"
+```
+
+The denoiser auto-picks the model by matching the folder's JEOL sidecar
+(instrument, detector, kV, mag, pixel size) against each model's recorded
+condition. `process_here.bat` chains denoising into stitching: right-click a
+folder → denoise → stitch `denoised/`.
 
 ## Requirements
 
