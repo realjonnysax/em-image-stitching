@@ -4,7 +4,7 @@ One-click stitching of SEM tile scans on Windows, built on
 [Ashlar](https://github.com/labsyspharm/ashlar) with a hardened registration
 step for electron-microscopy texture.
 
-Developed at the [Center for Biologic Imaging, University of Pittsburgh](https://cbipitt.github.io)
+Developed at the [Center for Biologic Imaging, University of Pittsburgh](https://www.cbi.pitt.edu)
 for a JEOL JSM-IT710HR (SEM supporter tile acquisition, NIS-Elements
 denoising) workflow, but it works on any tiled
 dataset whose files follow the naming convention below.
