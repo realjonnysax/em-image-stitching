@@ -5,13 +5,14 @@ One-click stitching of SEM tile scans on Windows, built on
 step for electron-microscopy texture.
 
 Developed at the [Center for Biologic Imaging, University of Pittsburgh](https://cbipitt.github.io)
-for a JEOL JSM-IT710HR + NIS-Elements workflow, but it works on any tiled
+for a JEOL JSM-IT710HR (SEM supporter tile acquisition, NIS-Elements
+denoising) workflow, but it works on any tiled
 dataset whose files follow the naming convention below.
 
 ## The workflow it replaces
 
-SEM tile scan → NIS-Elements denoise → invert → export tiles → manually herd
-Ashlar. This repo turns the last step into:
+SEM tile scan (SEM supporter) → NIS-Elements denoise → invert → export tiles →
+manually herd Ashlar. This repo turns the last step into:
 
 **right-click the folder of tiles → Send To → "Stitch with Ashlar"**
 
@@ -39,7 +40,7 @@ napari, or QuPath.
 00003 X004 Y013.tif
 ```
 
-`<set> X<col> Y<row>.tif` — this is how JEOL/NIS-Elements tile-scan exports
+`<set> X<col> Y<row>.tif` — this is how JEOL SEM supporter tile-scan exports
 name files (1-indexed, the col/row numbers are zero-padded). Multiple sets in
 one folder are fine; each is stitched separately. The tool reports missing
 tiles, odd-size tiles, and grid dimensions before stitching.
@@ -79,7 +80,7 @@ configurable). Use `--scan-only` for a dry-run report of what was found.
 | `--align-channel` | 0 | Grayscale tiles → channel 0 |
 | `pixel_size` | 0.5 | **Placeholder** (hard-coded in `stitch_tool.py`) |
 
-**Pixel-size gotcha:** NIS exports tiles without calibrated physical size, so
+**Pixel-size gotcha:** SEM supporter exports tiles without calibrated physical size, so
 `pixel_size=0.5` is a stand-in. Since `--maximum-shift` is interpreted in µm
 against it, 150 µm = a **300 px** shift cap. If your pixel size differs,
 scale `--maximum-shift` accordingly (or edit `PIXEL_SIZE` in `stitch_tool.py`).
