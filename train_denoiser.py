@@ -112,14 +112,18 @@ def sniff_condition(folder):
     """Best-effort detector/settings sniff from JEOL .txt sidecars."""
     import re as _re
     text = ''
-    for name in os.listdir(folder):
-        if name.lower().endswith('.txt'):
-            try:
-                with open(os.path.join(folder, name), encoding='utf-8', errors='replace') as fh:
-                    text = fh.read()
-                break
-            except OSError:
-                continue
+    for root, _dirs, files in os.walk(folder):
+        for name in sorted(files):
+            if name.lower().endswith('.txt'):
+                try:
+                    with open(os.path.join(root, name), encoding='utf-8',
+                              errors='replace') as fh:
+                        text = fh.read()
+                    break
+                except OSError:
+                    continue
+        if text:
+            break
     cond = {}
     for m in _re.finditer(r'^\$?([A-Za-z0-9_.\-]+)(?:[=:][ \t]*|[ \t]+)([^\r\n]+)$',
                           text, _re.M):
@@ -304,6 +308,15 @@ def cmd_register(args):
     datasets = list_datasets(args.data)
     all_pairs = []
     conditions = {}
+    prev = {}
+    mpath = os.path.join(args.work, 'manifest.json')
+    if os.path.isfile(mpath) and not getattr(args, 'force', False):
+        try:
+            with open(mpath, encoding='utf-8') as fh:
+                prev = {(p['dataset'], p['key']): p
+                        for p in json.load(fh).get('pairs', [])}
+        except (OSError, ValueError):
+            prev = {}
     for ds in datasets:
         pairs = find_pairs(ds)
         if not pairs:
@@ -314,15 +327,20 @@ def cmd_register(args):
         print('%s: %d pairs' % (name, len(pairs)))
         for key in sorted(pairs):
             a_path, b_path = pairs[key]
+            slug = re.sub(r'[^A-Za-z0-9]+', '_', name).strip('_')
+            pslug = re.sub(r'[^A-Za-z0-9]+', '_', key).strip('_')
+            npz = os.path.join(args.work, '%s__%s.npz' % (slug, pslug))
+            cached = prev.get((name, key))
+            if cached and cached.get('npz') == npz and os.path.isfile(npz):
+                all_pairs.append(cached)
+                print('  %-6s cached' % key)
+                continue
             a = load_sem_tif(a_path) / 255.0
             b = load_sem_tif(b_path) / 255.0
             aligned, (dy, dx, ncc) = register_pair(a, b)
             g, o = tls_gain_offset(a, b)
             target = (b - o) / g
             sa, sb = sigma_mad(a), sigma_mad(b)
-            slug = re.sub(r'[^A-Za-z0-9]+', '_', name).strip('_')
-            pslug = re.sub(r'[^A-Za-z0-9]+', '_', key).strip('_')
-            npz = os.path.join(args.work, '%s__%s.npz' % (slug, pslug))
             np.savez_compressed(npz, aligned=aligned.astype('float32'),
                                 target=target.astype('float32'))
             all_pairs.append({'dataset': name, 'key': key, 'npz': npz,
@@ -463,8 +481,10 @@ def cmd_eval(args):
     pairs = meta['pairs']
     eval_idx = set(range(3, len(pairs), 4)) if len(pairs) >= 4 else {len(pairs) - 1}
     eval_pairs = [p for i, p in enumerate(pairs) if i in eval_idx]
-    if getattr(args, 'max_eval', 0):
-        eval_pairs = eval_pairs[:args.max_eval]
+    if getattr(args, 'max_eval', 0) and len(eval_pairs) > args.max_eval > 1:
+        step = (len(eval_pairs) - 1) / (args.max_eval - 1)
+        eval_pairs = [eval_pairs[int(round(i * step))]
+                      for i in range(args.max_eval)]
     ckpt = torch.load(args.model, map_location='cpu', weights_only=True)
     model = build_unet(ckpt.get('base', 24))
     model.load_state_dict(ckpt['state_dict'])
@@ -558,10 +578,14 @@ def cmd_eval(args):
         except Exception:
             pass
     conds = meta.get('datasets', {})
-    first_cond = next(iter(conds.values()), {}) if isinstance(conds, dict) and conds else {}
+    cond = {}
+    if conds:
+        keys = set.intersection(*(set(c) for c in conds.values()))
+        cond = {k: next(iter({c[k] for c in conds.values()})) for k in keys
+                if len({c[k] for c in conds.values()}) == 1}
     entry = {'name': os.path.splitext(os.path.basename(args.model))[0],
              'file': os.path.basename(args.model),
-             'condition': first_cond,
+             'condition': cond,
              'pairs': len(pairs),
              'trained': meta.get('registered'),
              'eval': rows}
@@ -586,6 +610,8 @@ def main():
 
     p = sub.add_parser('register')
     common(p, data=True)
+    p.add_argument('--force', action='store_true',
+                   help='re-register pairs even if cached npz exists')
     p.set_defaults(fn=cmd_register)
 
     p = sub.add_parser('train')
@@ -605,6 +631,8 @@ def main():
 
     p = sub.add_parser('run')
     common(p, data=True)
+    p.add_argument('--force', action='store_true',
+                   help='re-register pairs even if cached npz exists')
     p.add_argument('--out', required=True, help='output model path (.pt)')
     p.add_argument('--epochs', type=int, default=60)
     p.add_argument('--batches', type=int, default=40)
