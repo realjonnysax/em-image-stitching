@@ -137,8 +137,10 @@ Full history with measurements: [STITCHING_VERSIONS.md](STITCHING_VERSIONS.md).
 `train_denoiser.py` learns to map noisy fast-scan images to clean slow-scan
 images from **paired** acquisitions of the same field (a = photo scan, b = slow
 scan). Training data lives outside the repo (e.g. `D:\SEM training\datasets\<set name>\`)
-as `NN a.tif` / `NN b.tif` pairs with their JEOL `.txt` sidecars — one detector /
-settings per folder — and is not committed here. Trained model artifacts in
+as `NN a.tif` / `NN b.tif` pairs with their JEOL `.txt` sidecars, or as montager
+runs in `standard aquisition\` + `max aquisition\` subfolders (tiles paired by
+filename, fast/slow decided from the sidecar SCAN_TIME) — one detector /
+settings per folder, not committed here. Trained model artifacts in
 `models/` are likewise per-machine and git-ignored.
 
 ```

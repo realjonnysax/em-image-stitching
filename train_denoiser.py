@@ -66,7 +66,8 @@ def list_datasets(data_path):
 
 
 def find_pairs(folder):
-    """{key: (a_path, b_path)} for 'NN a.tif'/'NN b.tif' pairs."""
+    """{key: (a_path, b_path)} for 'NN a.tif'/'NN b.tif' pairs, plus tile-name
+    pairs across montager subfolders (e.g. standard aquisition / max aquisition)."""
     pairs = {}
     for name in os.listdir(folder):
         m = PAIR_A_RE.match(name)
@@ -78,6 +79,32 @@ def find_pairs(folder):
             if os.path.isfile(bpath):
                 pairs[stem.strip() or name] = (os.path.join(folder, name), bpath)
                 break
+    subs = []
+    for d in sorted(os.listdir(folder)):
+        sub = os.path.join(folder, d)
+        if os.path.isdir(sub) and any(f.lower().endswith(('.tif', '.tiff'))
+                                      for f in os.listdir(sub)):
+            subs.append(sub)
+    if len(subs) >= 2:
+        def scan_time(sub):
+            for f in os.listdir(sub):
+                if f.lower().endswith('.txt'):
+                    try:
+                        with open(os.path.join(sub, f), encoding='utf-8',
+                                  errors='replace') as fh:
+                            m = re.search(r'\$SM_SCAN_TIME\s+(\d+)', fh.read())
+                    except OSError:
+                        continue
+                    if m:
+                        return int(m.group(1))
+            return 0
+        subs.sort(key=scan_time)
+        a_dir, b_dir = subs[0], subs[-1]
+        for f in os.listdir(a_dir):
+            if f.lower().endswith(('.tif', '.tiff')):
+                bpath = os.path.join(b_dir, f)
+                if os.path.isfile(bpath):
+                    pairs[os.path.splitext(f)[0]] = (os.path.join(a_dir, f), bpath)
     return pairs
 
 
@@ -119,17 +146,29 @@ def register_pair(a, b):
     from skimage.registration import phase_cross_correlation
     as_ = gaussian_filter(a, 2)
     bs_ = gaussian_filter(b, 2)
-    (shift, _, _) = phase_cross_correlation(as_, bs_, upsample_factor=10)
-    dy0, dx0 = int(round(shift[0])), int(round(shift[1]))
+    scale = 4
+    (shift, _, _) = phase_cross_correlation(as_[::scale, ::scale],
+                                            bs_[::scale, ::scale],
+                                            upsample_factor=10)
+    dy0 = int(round(shift[0] * scale))
+    dx0 = int(round(shift[1] * scale))
+    h, w = a.shape
+    R = 256
+    cy, cx = h // 2, w // 2
+    ys, xs = slice(cy - R, cy + R), slice(cx - R, cx + R)
+    bc = bs_[ys, xs]
     best = (-2.0, dy0, dx0)
     for dy in range(dy0 - 3, dy0 + 4):
         for dx in range(dx0 - 3, dx0 + 4):
-            moved = gaussian_filter(ndi_shift(a, (dy, dx), order=1), 2)
-            c = _ncc(moved, bs_)
+            ac = as_[ys.start - dy:ys.stop - dy, xs.start - dx:xs.stop - dx]
+            if ac.shape != bc.shape:
+                continue
+            c = _ncc(ac, bc)
             if c > best[0]:
                 best = (c, dy, dx)
-    aligned = ndi_shift(a, (best[1], best[2]), order=1)
-    return aligned, (int(best[1]), int(best[2]), float(best[0]))
+    dy, dx = int(best[1]), int(best[2])
+    aligned = ndi_shift(a, (dy, dx), order=1)
+    return aligned, (dy, dx, float(_ncc(gaussian_filter(aligned, 2), bs_)))
 
 
 def _ncc(x, y):
@@ -424,6 +463,8 @@ def cmd_eval(args):
     pairs = meta['pairs']
     eval_idx = set(range(3, len(pairs), 4)) if len(pairs) >= 4 else {len(pairs) - 1}
     eval_pairs = [p for i, p in enumerate(pairs) if i in eval_idx]
+    if getattr(args, 'max_eval', 0):
+        eval_pairs = eval_pairs[:args.max_eval]
     ckpt = torch.load(args.model, map_location='cpu', weights_only=True)
     model = build_unet(ckpt.get('base', 24))
     model.load_state_dict(ckpt['state_dict'])
@@ -558,6 +599,8 @@ def main():
     p = sub.add_parser('eval')
     common(p)
     p.add_argument('--model', required=True, help='trained model (.pt)')
+    p.add_argument('--max-eval', type=int, default=8,
+                   help='cap on eval pairs (BM3D is slow on full frames)')
     p.set_defaults(fn=cmd_eval)
 
     p = sub.add_parser('run')
