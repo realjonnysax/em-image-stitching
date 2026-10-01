@@ -5,14 +5,13 @@ One-click stitching of SEM tile scans on Windows, built on
 step for electron-microscopy texture.
 
 Developed at the [Center for Biologic Imaging, University of Pittsburgh](https://www.cbi.pitt.edu)
-for a JEOL JSM-IT710HR (SEM supporter tile acquisition, NIS-Elements
-denoising) workflow, but it works on any tiled
+for a JEOL JSM-IT710HR tile-scan workflow, but it works on any tiled
 dataset whose files follow the naming convention below.
 
 ## The workflow it replaces
 
-SEM tile scan (SEM supporter) → NIS-Elements denoise → invert → export tiles →
-manually herd Ashlar. This repo turns the last step into:
+SEM tile scan → manual denoising → invert → export tiles →
+manually herd Ashlar. This repo turns all of that into:
 
 **right-click the folder of tiles → Send To → "Stitch with Ashlar"**
 
@@ -31,7 +30,8 @@ napari, or QuPath.
 | `denoise_tool.py` | SEM denoiser: drops trained U-Net models onto tile folders, GUI + command line |
 | `train_denoiser.py` | Trains the denoiser from paired fast/slow scan images (register → normalize → train → eval) |
 | `denoise_here.bat` / `install_sendto_denoise.bat` | Same drop-in / Send-To conveniences for denoising |
-| `process_here.bat` | All-in-one: denoise a folder, then stitch the denoised tiles |
+| `process_here.bat` | All-in-one: denoise a folder (asks whether to invert), then stitch the denoised tiles |
+| `install_sendto_process.bat` | One-time: adds "Denoise + Stitch with CBI model" to the right-click Send To menu |
 | `STITCHING_VERSIONS.md` | Full V1→V7 development history: what failed, why, and the fix |
 | `250325_sem_stitch_notebook...ipynb` | Working notebook: parameter validation, seam and duplicate-structure analysis |
 
@@ -54,7 +54,8 @@ tiles, odd-size tiles, and grid dimensions before stitching.
 1. Python with Ashlar: `pip install ashlar` (brings numpy/scipy).
    `Pillow` is optional but recommended (enables tile-size sanity checks).
    The GUI uses tkinter, which ships with Python on Windows.
-2. Double-click `install_sendto.bat` once.
+2. Double-click `install_sendto.bat` (stitching), `install_sendto_denoise.bat`
+   (denoising), and/or `install_sendto_process.bat` (denoise + stitch) once.
 
 On our lab PCs Ashlar lives in `C:\miniconda3\python.exe`; the `.bat` files
 pick that automatically and fall back to whatever `python` is on PATH.
@@ -132,28 +133,34 @@ output quality matches the validated v7 runs.
 
 Full history with measurements: [STITCHING_VERSIONS.md](STITCHING_VERSIONS.md).
 
-## Denoising (CARE-style, paired scans)
+## Denoising (U-Net)
 
-`train_denoiser.py` learns to map noisy fast-scan images to clean slow-scan
-images from **paired** acquisitions of the same field (a = photo scan, b = slow
-scan). Training data lives outside the repo (e.g. `D:\SEM training\datasets\<set name>\`)
-as `NN a.tif` / `NN b.tif` pairs with their JEOL `.txt` sidecars, or as montager
-runs in `standard aquisition\` + `max aquisition\` subfolders (tiles paired by
-filename, fast/slow decided from the sidecar SCAN_TIME) — one detector /
-settings per folder, not committed here. Trained model artifacts in
-`models/` are likewise per-machine and git-ignored.
+The repo ships a trained denoiser, `models/sem_denoise_v2.pt` — a compact
+U-Net developed at CBI by distillation from high-quality reference-denoised
+tiles (65 tile-scan sets, 10,981 image pairs, BED-C detector 6–10 kV,
+2.5k–50k magnification). The training pipeline (`train_denoiser.py`) and
+training data stay outside the repo on local disks.
 
-```
-1. python train_denoiser.py register --data "D:\SEM training\datasets"   (cache pairs)
-2. python train_denoiser.py train --model models\<name>.pt               (U-Net, GPU)
-3. python train_denoiser.py eval   --model models\<name>.pt              (vs BM3D, sheet)
-4. Right-click folder of tiles -> Send To -> "Denoise with U-Net"
-```
-
-The denoiser auto-picks the model by matching the folder's JEOL sidecar
+The tool auto-picks the model by matching the folder's JEOL sidecar
 (instrument, detector, kV, mag, pixel size) against each model's recorded
-condition. `process_here.bat` chains denoising into stitching: right-click a
-folder → denoise → stitch `denoised/`.
+condition.
+
+**Invert option:** SEM images can be shown black-on-white or white-on-black.
+Denoised output always follows the raw tile polarity; to flip it, use any of:
+
+- `process_here.bat` / Send To: answer `y` at the "Invert output contrast?" prompt
+- GUI: check **Invert**
+- CLI: append `--invert`
+
+```
+1. Right-click folder of tiles -> Send To -> "Denoise + Stitch with CBI model"
+2. Copy process_here.bat (+ the .py tools) into the folder, double-click
+3. python denoise_tool.py                     (GUI: folder, model, set list, Invert checkbox)
+4. python denoise_tool.py <folder> [--invert] [--sets 00001,00003] [--overwrite]
+```
+
+`process_here.bat` chains denoising into stitching: right-click a folder →
+denoise → stitch `denoised/` in one run.
 
 ## Requirements
 

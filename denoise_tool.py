@@ -15,7 +15,7 @@ Model selection: models\\ next to this script holds trained .pt files plus a
 manifest.json written by train_denoiser.py. The tool sniffs the JEOL .txt
 sidecar in the tile folder and picks the model whose recorded settings
 match; otherwise the first model with a warning. --invert applies 255-x
-after denoising (NIS-style display polarity).
+after denoising (inverted display polarity, white background).
 """
 import argparse
 import os

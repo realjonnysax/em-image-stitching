@@ -8,7 +8,10 @@ set "DIR=%~dp0"
 if "%DIR:~-1%"=="\" if not "%DIR:~-2%"==":\" set "DIR=%DIR:~0,-1%"
 set "TARGET=%~1"
 if "%TARGET%"=="" set "TARGET=%DIR%"
-"%PY%" "%DIR%\denoise_tool.py" "%TARGET%"
+set "INVERT="
+set /p "ANS=Invert output contrast (white background)? [y/N] "
+if /i "%ANS%"=="y" set "INVERT=--invert"
+"%PY%" "%DIR%\denoise_tool.py" "%TARGET%" %INVERT%
 if errorlevel 1 (pause
     exit /b 1)
 "%PY%" "%DIR%\stitch_tool.py" "%TARGET%\denoised"
