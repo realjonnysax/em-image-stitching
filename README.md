@@ -143,7 +143,10 @@ training data stay outside the repo on local disks.
 
 The tool auto-picks the model by matching the folder's JEOL sidecar
 (instrument, detector, kV, mag, pixel size) against each model's recorded
-condition.
+condition. Any folder of TIFFs works: tiled folders (`<set> X### Y###.tif`)
+are processed per tile set, and folders of plain SEM images without tile
+coordinates are denoised as a single batch (stitching only applies to tiled
+folders).
 
 **Invert option:** SEM images can be shown black-on-white or white-on-black.
 Denoised output always follows the raw tile polarity; to flip it, use any of:

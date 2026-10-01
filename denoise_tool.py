@@ -1,6 +1,8 @@
-"""CBI SEM denoiser - applies trained models to tile folders, GUI or drop-in.
+"""CBI SEM denoiser - applies trained models to folders of SEM images.
 
-Tile naming: <set> X### Y###.tif  (same detector as the stitcher)
+Tile naming: <set> X### Y###.tif  (same detector as the stitcher). Folders of
+plain SEM images without tile coordinates are denoised as a single batch;
+stitching needs tile coordinates, so only tiled folders can be stitched.
 
 Ways to use:
   1. Place denoise_tool.py + denoise_here.bat in a folder of tiles and
@@ -25,12 +27,37 @@ import sys
 import threading
 import time
 
-from stitch_tool import CONDA_PY, scan_folder
+from stitch_tool import CONDA_PY, TILE_RE, scan_folder
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
 DEFAULT_SUFFIX = ''
 TILE = 512
 OVERLAP = 64
+
+
+class FlatSet:
+    """TIFFs in a folder that do not follow the '<set> X### Y###.tif' pattern."""
+
+    def __init__(self, folder):
+        self.scan = 'all'
+        self.folder = folder
+        self.files = sorted(
+            f for f in os.listdir(folder)
+            if f.lower().endswith(('.tif', '.tiff'))
+            and not TILE_RE.match(f)
+            and os.path.isfile(os.path.join(folder, f)))
+
+    def grid(self):
+        return len(self.files), 1
+
+
+def scan_any(folder):
+    """Tile sets if present, plus one FlatSet for any non-pattern TIFFs."""
+    sets = scan_folder(folder)
+    loose = FlatSet(folder)
+    if loose.files:
+        sets.append(loose)
+    return sets
 
 
 def sidecar_text(folder):
@@ -117,8 +144,12 @@ def denoise_one(folder, scan, model, device, out_dir, invert=False,
 def report(sets, folder, entries, chosen):
     print('%d image set(s) in %s' % (len(sets), folder))
     for s in sets:
-        gx, gy = s.grid()
-        print('  %s: %d tiles, grid %dx%d' % (s.scan, len(s.files), gx, gy))
+        if isinstance(s, FlatSet):
+            print('  %s: %d images (no tile pattern)'
+                  % (s.scan, len(s.files)))
+        else:
+            gx, gy = s.grid()
+            print('  %s: %d tiles, grid %dx%d' % (s.scan, len(s.files), gx, gy))
     if entries:
         print('model: %s' % chosen.get('name'))
     else:
@@ -130,9 +161,9 @@ def run_console(folder, args):
         sys.stdout.reconfigure(line_buffering=True)
     except Exception:
         pass
-    sets = scan_folder(folder)
+    sets = scan_any(folder)
     if not sets:
-        print('No tile files matching "<set> X### Y###.tif" in ' + folder)
+        print('No .tif/.tiff images in ' + folder)
         return 1
     entries = load_manifest(args.models_dir)
     if args.model:
@@ -253,14 +284,15 @@ def run_gui(root=None):
             self.tree.delete(*self.tree.get_children())
             self.checked.clear()
             try:
-                sets = scan_folder(self.folder.get())
+                sets = scan_any(self.folder.get())
             except Exception as e:
                 self.set_status('Cannot scan: %s' % e)
                 return
             for s in sets:
-                gx, gy = s.grid()
+                note = ('%d images' % len(s.files) if isinstance(s, FlatSet)
+                        else '%dx%d' % s.grid())
                 iid = self.tree.insert('', 'end', values=(
-                    '[x]', s.scan, len(s.files), '%dx%d' % (gx, gy)))
+                    '[x]', s.scan, len(s.files), note))
                 self.checked[iid] = True
             self.set_status('%d set(s) found. Uncheck rows to skip, then Denoise.'
                             % len(sets))
@@ -305,7 +337,7 @@ def run_gui(root=None):
                 self.q.put(('log', 'model: %s (%s)' % (os.path.basename(model_path), device)))
                 out_dir = os.path.join(folder, 'denoised')
                 for scan in picks:
-                    sets = {s.scan: s for s in scan_folder(folder)}
+                    sets = {s.scan: s for s in scan_any(folder)}
                     if scan not in sets:
                         continue
                     self.q.put(('log', '--- %s -> %s ---' % (scan, out_dir)))
