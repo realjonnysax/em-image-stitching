@@ -27,7 +27,11 @@ import re
 import sys
 import threading
 import time
+import warnings
 from collections import Counter
+
+warnings.filterwarnings('ignore', category=FutureWarning,
+                        message='.*plugin infrastructure in `skimage.io`.*')
 
 OVERLAP = 0.20
 PIXEL_SIZE = 0.5
