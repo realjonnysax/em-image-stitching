@@ -40,8 +40,8 @@ PAIR_A_RE = re.compile(r'^(.*?)[\s_-]?a\.tif$', re.IGNORECASE)
 
 # ---------------------------------------------------------------- data utils
 
-def load_sem_tif(path):
-    """JEOL SEM supporter export -> float32 grayscale, info bar cropped."""
+def load_sem_tif(path, crop_bar=True):
+    """JEOL SEM export -> float32 grayscale; info bar cropped unless told not to."""
     import numpy as np
     import tifffile
     arr = tifffile.imread(path)
@@ -51,7 +51,7 @@ def load_sem_tif(path):
         img = arr[:, :, 0]
     else:
         img = arr
-    if img.shape[0] > INFO_BAR_H and img.shape[0] % 2048 == 0:
+    if crop_bar and img.shape[0] > INFO_BAR_H and img.shape[0] % 2048 == 0:
         img = img[:INFO_BAR_H]
     return img.astype('float32')
 

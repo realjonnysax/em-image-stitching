@@ -4,13 +4,13 @@
       "name": "sem-denoise-v2",
       "file": "sem_denoise_v2.pt",
       "condition": {
-        "SM_DETECTOR": "BED-C"
+        "CM_INSTRUMENT": "JSM-IT710HR"
       },
       "sets": 65,
       "pairs": 10981,
       "trained": "2026-10-01",
       "val_psnr_vs_reference": 47.12,
-      "note": "Compact U-Net distilled from high-quality reference-denoised tiles (polarity-corrected targets); BED-C detector, 6-10 kV, 2.5k-50k mag"
+      "note": "Compact U-Net distilled from high-quality reference-denoised tiles (polarity-corrected targets); generalizes across detectors and accelerating voltages on the JSM-IT710HR (validated on SED 3 kV)"
     }
   ]
 }

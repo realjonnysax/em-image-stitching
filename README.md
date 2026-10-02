@@ -146,7 +146,9 @@ The tool auto-picks the model by matching the folder's JEOL sidecar
 condition. Any folder of TIFFs works: tiled folders (`<set> X### Y###.tif`)
 are processed per tile set, and folders of plain SEM images without tile
 coordinates are denoised as a single batch (stitching only applies to tiled
-folders).
+folders). The JEOL data bar at the bottom of montager exports (the bottom
+128 rows of 2048-row images) is copied through untouched — only image
+content is denoised.
 
 **Invert option:** SEM images can be shown black-on-white or white-on-black.
 Denoised output always follows the raw tile polarity; to flip it, use any of:
