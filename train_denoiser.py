@@ -32,6 +32,8 @@ import random
 import re
 import sys
 
+from scipy.ndimage import gaussian_filter
+
 DEFAULT_WORK = r'D:\SEM training\train_work'
 PS = 256          # training patch size
 BAR_H = 128       # JEOL data-bar rows appended below the image content
@@ -305,6 +307,28 @@ def ssim_fn(pred, target, window, data_range=1.0):
     return v.mean()
 
 
+FLAT_BLOCK = 32
+FLAT_LO = 6.0 / 255.0
+FLAT_HI = 12.0 / 255.0
+FLAT_SIGMA = 8.0
+
+
+def _flat_weight(img):
+    import numpy as np
+    h, w = img.shape
+    hb = max(h // FLAT_BLOCK, 1)
+    wb = max(w // FLAT_BLOCK, 1)
+    stds = img[:hb * FLAT_BLOCK, :wb * FLAT_BLOCK].reshape(
+        hb, FLAT_BLOCK, wb, FLAT_BLOCK).std(axis=(1, 3))
+    wgt = np.clip((stds - FLAT_LO) / (FLAT_HI - FLAT_LO), 0.0, 1.0)
+    wmap = np.repeat(np.repeat(wgt, FLAT_BLOCK, axis=0), FLAT_BLOCK, axis=1)
+    if wmap.shape[0] < h:
+        wmap = np.vstack([wmap, np.repeat(wmap[-1:], h - wmap.shape[0], axis=0)])
+    if wmap.shape[1] < w:
+        wmap = np.hstack([wmap, np.repeat(wmap[:, -1:], w - wmap.shape[1], axis=1)])
+    return gaussian_filter(wmap, 16.0)
+
+
 def tiled_predict(model, img, device, tile=512, overlap=64):
     import numpy as np
     import torch
@@ -330,7 +354,12 @@ def tiled_predict(model, img, device, tile=512, overlap=64):
                 p = model(t)[0, 0].cpu().numpy()
                 out[y:y + tile, x:x + tile] += p
                 cnt[y:y + tile, x:x + tile] += 1
-    return (out / np.maximum(cnt, 1))[:h, :w]
+    out = (out / np.maximum(cnt, 1))[:h, :w]
+    wmap = _flat_weight(img)
+    if wmap.min() < 0.999:
+        blur = gaussian_filter(img, FLAT_SIGMA)
+        out = wmap * out + (1.0 - wmap) * blur
+    return out
 
 
 # ---------------------------------------------------------------- subcommands
