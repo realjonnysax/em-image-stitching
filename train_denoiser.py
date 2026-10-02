@@ -34,14 +34,44 @@ import sys
 
 DEFAULT_WORK = r'D:\SEM training\train_work'
 PS = 256          # training patch size
-INFO_BAR_H = 1920  # JEOL 2560x2048 exports: content is rows 0-1919
+BAR_H = 128       # JEOL data-bar rows appended below the image content
+JEOL_CONTENT_STEP = 960  # JEOL content heights are multiples of 960 (960/1920/3840)
 PAIR_A_RE = re.compile(r'^(.*?)[\s_-]?a\.tif$', re.IGNORECASE)
 
 
 # ---------------------------------------------------------------- data utils
 
+def sidecar_image_size(path):
+    """(width, height) content size from the matching JEOL .txt sidecar, or None."""
+    p = os.path.splitext(path)[0] + '.txt'
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, errors='ignore') as fh:
+            m = re.search(r'\$CM_IMAGE_SIZE\s+(\d+)\s+(\d+)', fh.read())
+    except OSError:
+        return None
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def bar_rows(img, path):
+    """JEOL data-bar rows at the bottom of the image (0 if none).
+
+    Prefers the sidecar's $CM_IMAGE_SIZE content size; without a matching
+    sidecar, falls back to the JEOL export heights (content = multiple of
+    960 plus a 128-row bar).
+    """
+    h, w = img.shape
+    size = sidecar_image_size(path)
+    if size and size[0] == w and 0 < size[1] < h:
+        return h - size[1]
+    if h > BAR_H and (h - BAR_H) % JEOL_CONTENT_STEP == 0:
+        return BAR_H
+    return 0
+
+
 def load_sem_tif(path, crop_bar=True):
-    """JEOL SEM export -> float32 grayscale; info bar cropped unless told not to."""
+    """JEOL SEM export -> float32 grayscale; data bar cropped unless told not to."""
     import numpy as np
     import tifffile
     arr = tifffile.imread(path)
@@ -51,8 +81,10 @@ def load_sem_tif(path, crop_bar=True):
         img = arr[:, :, 0]
     else:
         img = arr
-    if crop_bar and img.shape[0] > INFO_BAR_H and img.shape[0] % 2048 == 0:
-        img = img[:INFO_BAR_H]
+    if crop_bar:
+        nbar = bar_rows(img, path)
+        if nbar:
+            img = img[:img.shape[0] - nbar]
     return img.astype('float32')
 
 

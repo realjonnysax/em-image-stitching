@@ -3,8 +3,8 @@
 Tile naming: <set> X### Y###.tif  (same detector as the stitcher). Folders of
 plain SEM images without tile coordinates are denoised as a single batch;
 stitching needs tile coordinates, so only tiled folders can be stitched.
-The JEOL data bar (bottom 128 rows of 2048-row montager exports) is copied
-through untouched - only the image content is denoised.
+The JEOL data bar below the content (detected from the JEOL sidecar at any
+resolution) is copied through untouched - only image content is denoised.
 
 Ways to use:
   1. Place denoise_tool.py + denoise_here.bat in a folder of tiles and
@@ -119,7 +119,7 @@ def load_model(path):
 
 def denoise_one(folder, scan, model, device, out_dir, invert=False,
                 log=print, overwrite=False):
-    from train_denoiser import load_sem_tif, tiled_predict
+    from train_denoiser import load_sem_tif, tiled_predict, bar_rows
     os.makedirs(out_dir, exist_ok=True)
     done = failed = skipped = 0
     for name in scan.files:
@@ -130,7 +130,7 @@ def denoise_one(folder, scan, model, device, out_dir, invert=False,
         try:
             img = load_sem_tif(os.path.join(folder, name), crop_bar=False) / 255.0
             h = img.shape[0]
-            nbar = 128 if (h % 2048 == 0 and h > 1919) else 0
+            nbar = bar_rows(img, os.path.join(folder, name))
             den = tiled_predict(model, img[:h - nbar] if nbar else img,
                                 device, tile=TILE, overlap=OVERLAP)
             import numpy as np
